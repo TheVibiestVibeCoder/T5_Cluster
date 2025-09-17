@@ -352,7 +352,7 @@ class EnhancedThemeClustering:
     def create_cluster_summaries(self):
         """Create summary information for each cluster"""
         print("\nCreating cluster summaries...")
-        
+
         for cluster_id in np.unique(self.clusters[self.clusters >= 0]):
             cluster_data = self.analysis_df[self.clusters == cluster_id]
             
@@ -388,9 +388,86 @@ class EnhancedThemeClustering:
                 'top_authors': top_authors,
                 'sample_articles': cluster_data.head(3)[['Date', 'Headline', 'Journalists']].to_dict('records')
             }
-            
+
             self.cluster_summaries[cluster_id] = summary
-    
+
+    def assign_cluster_names_without_ai(self):
+        """Generate descriptive cluster names when AI narratives are skipped."""
+        print("\nDeriving cluster names from keywords and headlines...")
+
+        derived_names = {}
+        for cluster_id, summary in self.cluster_summaries.items():
+            name = self._derive_cluster_name(summary, cluster_id)
+            derived_names[cluster_id] = name
+
+        self.cluster_names = derived_names
+
+    def _derive_cluster_name(self, summary, cluster_id):
+        keywords = summary.get('keywords') or []
+        keyword_based = self._name_from_keywords(keywords)
+        if keyword_based:
+            return keyword_based
+
+        headline_based = self._name_from_headlines(summary.get('top_headlines', []))
+        if headline_based:
+            return headline_based
+
+        return f"Theme {cluster_id}"
+
+    def _name_from_keywords(self, keywords):
+        cleaned_keywords = []
+        for keyword in keywords:
+            if not isinstance(keyword, str):
+                continue
+
+            cleaned = keyword.strip()
+            if not cleaned:
+                continue
+
+            cleaned = cleaned.replace('-', ' ').replace('_', ' ')
+            cleaned = re.sub(r'\s+', ' ', cleaned)
+            if not cleaned:
+                continue
+
+            parts = []
+            for part in cleaned.split():
+                if part.isupper() or part.isdigit():
+                    parts.append(part)
+                else:
+                    parts.append(part.capitalize())
+
+            formatted = ' '.join(parts)
+            if formatted:
+                cleaned_keywords.append(formatted)
+
+        if not cleaned_keywords:
+            return None
+
+        if len(cleaned_keywords) == 1:
+            return cleaned_keywords[0]
+
+        return ' & '.join(cleaned_keywords[:2])
+
+    def _name_from_headlines(self, headlines):
+        for headline in headlines:
+            if not isinstance(headline, str):
+                continue
+
+            cleaned = headline.strip()
+            if not cleaned:
+                continue
+
+            cleaned = cleaned.split(' - ')[0]
+            cleaned = cleaned.split(' | ')[0]
+            cleaned = re.sub(r'["“”]', '', cleaned)
+            cleaned = re.sub(r"[^A-Za-z0-9&/' ]+", ' ', cleaned)
+            cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+            if len(cleaned.split()) >= 2:
+                return cleaned[:80]
+
+        return None
+
     def chunk_text_for_summarization(self, text, max_chunk_size=400):
         """Split long text into manageable chunks for summarization"""
         words = text.split()
@@ -953,8 +1030,8 @@ class EnhancedThemeClustering:
             # Step 6: Generate enhanced narratives with map-reduce
             if skip_flag:
                 self.cluster_narratives = {}
-                self.cluster_names = {}
-                print("Skipping AI narrative generation as requested.")
+                self.assign_cluster_names_without_ai()
+                print("Skipping AI narrative generation as requested (cluster names preserved).")
             else:
                 self.generate_cluster_narratives()
 
