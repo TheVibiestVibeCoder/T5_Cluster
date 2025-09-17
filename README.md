@@ -4,6 +4,10 @@ A production-oriented Python tool that clusters news or article corpora into coh
 
 ---
 
+Execute command beispiel: 
+
+python cluster_narrative_engine.py --csv "FILE_PATH" --min-cluster-size XYZ --topic "XYZ" --skip_summaries
+
 ## Key features
 
 - **Robust semantic embeddings**  
