@@ -51,7 +51,7 @@ class EnhancedThemeClustering:
     - Optimized TF-IDF processing
     """
     
-    def __init__(self, csv_path):
+    def __init__(self, csv_path, skip_summaries=False):
         self.csv_path = csv_path
         self.df = None
         self.embeddings = None
@@ -62,10 +62,11 @@ class EnhancedThemeClustering:
         self.cluster_names = {}
         self.cluster_keywords = {}
         self.current_cluster_id = None
-        
+        self.skip_summaries = skip_summaries
+
         # Determine compute device
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        
+
         print("Enhanced Theme Clustering Tool with Advanced AI Narratives - Improved Version")
         print("=" * 80)
         self.setup_models()
@@ -77,11 +78,16 @@ class EnhancedThemeClustering:
             self.sentence_model = SentenceTransformer(
                 'all-MiniLM-L6-v2', device=self.device
             )
-            
+
+            if self.skip_summaries:
+                print("Skipping AI summarization model loading (skip_summaries enabled)")
+                self.summarizer = None
+                return
+
             print("Loading T5-base for enhanced narrative generation...")
             try:
                 self.summarizer = pipeline(
-                    "summarization", 
+                    "summarization",
                     model="t5-base",
                     device=0 if self.device == 'cuda' else -1,
                     max_length=220,
@@ -917,11 +923,17 @@ class EnhancedThemeClustering:
             print(f"  - {output_prefix}_summaries.csv (cluster summaries)")
             print(f"  - cluster_visualization.png (visual representation)")
     
-    def run_clustering_analysis(self, sample_size=None, min_cluster_size=5, topic_filter=None):
+    def run_clustering_analysis(self, sample_size=None, min_cluster_size=5, topic_filter=None, skip_summaries=False):
         """Enhanced main method to run the complete clustering analysis"""
         print("Starting enhanced theme clustering analysis...")
         print("="*80)
-        
+
+        skip_flag = skip_summaries or self.skip_summaries
+        self.skip_summaries = skip_flag
+        if skip_flag and getattr(self, 'summarizer', None) is not None:
+            # Ensure summarizer isn't used when skipping summaries
+            self.summarizer = None
+
         try:
             # Step 1: Load and clean data
             self.load_and_clean_data(topic_filter=topic_filter)
@@ -934,19 +946,25 @@ class EnhancedThemeClustering:
             
             # Step 4: Extract optimized keywords
             self.extract_cluster_keywords()
-            
+
             # Step 5: Create summaries
             self.create_cluster_summaries()
-            
+
             # Step 6: Generate enhanced narratives with map-reduce
-            self.generate_cluster_narratives()
-            
+            if skip_flag:
+                self.cluster_narratives = {}
+                self.cluster_names = {}
+                print("Skipping AI narrative generation as requested.")
+            else:
+                self.generate_cluster_narratives()
+
             # Step 7: Visualize results
             self.visualize_clusters()
-            
+
             # Step 8: Print narrative report
-            self.print_narrative_report()
-            
+            if not skip_flag:
+                self.print_narrative_report()
+
             # Step 9: Export results
             self.export_results()
             
@@ -979,6 +997,7 @@ def main():
     parser.add_argument("--sample-size", type=int, help="Maximum articles to analyze")
     parser.add_argument("--min-cluster-size", type=int, default=5, help="Minimum cluster size")
     parser.add_argument("--topic", nargs="*", help="Optional keyword(s) to filter articles")
+    parser.add_argument("--skip_summaries", action="store_true", help="Skip AI narrative summarization")
     
     args = parser.parse_args()
     
@@ -990,11 +1009,12 @@ def main():
     print()
     
     try:
-        clusterer = EnhancedThemeClustering(args.csv)
+        clusterer = EnhancedThemeClustering(args.csv, skip_summaries=args.skip_summaries)
         success = clusterer.run_clustering_analysis(
             sample_size=args.sample_size,
             min_cluster_size=args.min_cluster_size,
-            topic_filter=args.topic
+            topic_filter=args.topic,
+            skip_summaries=args.skip_summaries
         )
         
         if success:
